@@ -186,6 +186,9 @@
 
                 // 3. Audio Context voor AI-stem
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                try {
+                    await audioCtx.resume(); // ensure audio is allowed after user gesture
+                } catch (e) { /* ignore */ }
                 analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 256;
                 gainNode = audioCtx.createGain();
@@ -234,18 +237,26 @@
                         msg = JSON.parse(event.data);
                     } catch (e) {
                         console.warn('Non-JSON WS message', event.data);
+                        appendTranscript('[debug] Non-JSON message received', 'assistant');
                         return;
                     }
 
+                    console.debug('WS message', msg);
+
                     // Als de AI audio stuurt, moeten we dit decoderen en visualiseren
-                    if (msg.type === "response.audio.delta") {
+                    if (msg.type === "response.audio.delta" && msg.audio) {
                         playAndVisualize(msg.audio);
                     }
 
                     // Tekstdelays of final text
-                    if (msg.type === 'response.output_text.delta' || msg.type === 'response.create' || msg.type === 'response.output_text') {
-                        const text = extractTextFromMessage(msg);
-                        if (text) appendTranscript(text);
+                    const text = extractTextFromMessage(msg);
+                    if (text) {
+                        appendTranscript(text, 'assistant');
+                    } else {
+                        // If no text found, append a short debug entry so you can see activity
+                        if (msg.type && msg.type.startsWith('response')) {
+                            appendTranscript(`[debug] ${msg.type}`, 'assistant');
+                        }
                     }
                 };
 
