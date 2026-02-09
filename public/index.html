@@ -71,6 +71,10 @@
             <h1 class="neon-text text-xl font-bold tracking-[0.3em]">CORE_AGENT_LINK</h1>
             <p id="status" class="text-[10px] text-magenta-500 opacity-70 italic uppercase">Status: Awaiting
                 Initialization...</p>
+            <div class="mt-1 flex gap-3 items-center justify-center">
+                <div id="conn-state" class="text-[10px] text-cyan-300">conn: disconnected</div>
+                <div id="ttl-indicator" class="text-[10px] text-yellow-300">ttl: -</div>
+            </div>
 
             <input type="text" id="input-field" name="command" placeholder="COMMAND_INPUT_"
                 class="glitch-border bg-transparent p-3 w-72 text-center text-cyan-400 focus:outline-none placeholder-cyan-900 transition-all">
@@ -119,6 +123,7 @@
         let analyser = null;
         let gainNode = null;
         let muted = false;
+        let ttlInterval = null;
 
         async function initCore() {
             status.innerText = "Requesting_Ephemeral_Token...";
@@ -157,6 +162,16 @@
                 // persist session data for later (user inputs)
                 window._sessionData = sessionData;
 
+                // start TTL timer if expiry provided
+                if (sessionData?.client_secret?.expires_at) {
+                    const expiresAt = Number(sessionData.client_secret.expires_at);
+                    window._ephemeralExpires = expiresAt * 1000;
+                    startTTLTimer(window._ephemeralExpires);
+                }
+
+                // update connection state
+                updateConnectionState('connecting');
+
                 // Optionally show expiry if present
                 if (sessionData?.client_secret?.expires_at) {
                     const expires = new Date(sessionData.client_secret.expires_at * 1000);
@@ -180,6 +195,7 @@
 
                 ws.onopen = () => {
                     status.innerText = "System: Neural_Link_Established";
+                    updateConnectionState('connected');
                     startBtn.classList.add('hidden');
 
                     // Stuur een welkomstbericht naar de AI
@@ -200,12 +216,14 @@
                 ws.onerror = (ev) => {
                     console.error('WebSocket error', ev);
                     status.innerText = 'WebSocket error';
+                    updateConnectionState('error');
                     startBtn.disabled = false;
                 };
 
                 ws.onclose = (ev) => {
                     console.log('WebSocket closed', ev);
                     status.innerText = 'Connection closed';
+                    updateConnectionState('disconnected');
                     startBtn.classList.remove('hidden');
                     startBtn.disabled = false;
                 };
@@ -324,6 +342,12 @@
             const startBtn = document.getElementById('start-btn');
             startBtn.classList.remove('hidden');
             startBtn.disabled = false;
+            // clear TTL timer when disconnected
+            if (ttlInterval) {
+                clearInterval(ttlInterval);
+                ttlInterval = null;
+            }
+            updateConnectionState('disconnected');
         }
 
         function reconnectWS() {
@@ -417,6 +441,35 @@
         try {
             document.getElementById('mic-btn')?.addEventListener('click', toggleMic);
         } catch (e) { }
+
+        // Connection state/TTL helpers
+        function updateConnectionState(state) {
+            const el = document.getElementById('conn-state');
+            if (!el) return;
+            el.textContent = `conn: ${state}`;
+            el.className = state === 'connected' ? 'text-[10px] text-green-300' : state === 'error' ? 'text-[10px] text-red-400' : 'text-[10px] text-cyan-300';
+        }
+
+        function startTTLTimer(untilMs) {
+            const el = document.getElementById('ttl-indicator');
+            if (!el) return;
+            if (ttlInterval) clearInterval(ttlInterval);
+            function update() {
+                const now = Date.now();
+                const remaining = Math.max(0, Math.floor((untilMs - now) / 1000));
+                if (remaining <= 0) {
+                    el.textContent = 'ttl: expired';
+                    clearInterval(ttlInterval);
+                    ttlInterval = null;
+                } else {
+                    const m = Math.floor(remaining / 60);
+                    const s = remaining % 60;
+                    el.textContent = `ttl: ${m}m ${s}s`;
+                }
+            }
+            update();
+            ttlInterval = setInterval(update, 1000);
+        }
 
         // Wire control buttons
         try {
