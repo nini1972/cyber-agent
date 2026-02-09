@@ -82,6 +82,16 @@
 
         <div class="mt-4 w-80 text-left">
             <div id="transcript" class="glitch-border bg-black/30 p-3 h-36 overflow-auto text-sm text-cyan-200"></div>
+            <div class="mt-2">
+                <label class="text-xs text-cyan-300">System instructions (editable):</label>
+                <textarea id="instruction-editor" rows="3"
+                    class="w-full mt-1 p-2 text-xs bg-black/50 text-cyan-200 glitch-border"
+                    placeholder="Edit instructions for testing..."></textarea>
+                <div class="flex items-center gap-2 mt-1">
+                    <input id="use-custom" type="checkbox" />
+                    <label for="use-custom" class="text-xs text-cyan-300">Use custom instruction</label>
+                </div>
+            </div>
             <div class="mt-2 flex gap-2 justify-center">
                 <button id="disconnect-btn"
                     class="px-3 py-1 bg-red-700/20 border border-red-500 text-xs">Disconnect</button>
@@ -129,6 +139,12 @@
                 // sessionData should include client_secret.value when creating ephemeral keys
                 const EPHEMERAL_KEY = sessionData?.client_secret?.value;
 
+                // populate instruction editor with server-provided instructions for quick editing
+                try {
+                    const editor = document.getElementById('instruction-editor');
+                    if (editor) editor.value = sessionData.instructions || editor.value || '';
+                } catch (e) { /* ignore */ }
+
                 if (!EPHEMERAL_KEY) {
                     status.innerText = "Error: No ephemeral key returned from /api/session";
                     console.error('session response', sessionData);
@@ -162,12 +178,15 @@
                     startBtn.classList.add('hidden');
 
                     // Stuur een welkomstbericht naar de AI
+                    const customChecked = document.getElementById('use-custom')?.checked;
+                    const editorVal = document.getElementById('instruction-editor')?.value;
+                    const instructionToUse = (customChecked && editorVal) ? editorVal : (sessionData.instructions || "Je bent een cyberpunk AI-agent. Begroet de gebruiker kort en krachtig in het Nederlands.");
+
                     const event = {
                         type: "response.create",
                         response: {
                             modalities: ["audio", "text"],
-                            // Prefer server-provided instructions when available
-                            instructions: sessionData.instructions || "Je bent een cyberpunk AI-agent. Begroet de gebruiker kort en krachtig in het Nederlands.",
+                            instructions: instructionToUse,
                         }
                     };
                     ws.send(JSON.stringify(event));

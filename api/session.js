@@ -69,7 +69,7 @@ export default async function handler(req, res) {
         // Attach developer-provided or default instructions to the session response
         const defaultInstructions =
             process.env.SESSION_INSTRUCTIONS ||
-            "Je bent een vriendelijke, beknopte cyberpunk AI-agent. Reageer in het Nederlands, wees behulpzaam, kort en concreet. Geef geen API-sleutels of persoonlijke data.";
+            "Je bent een cyberpunk AI-agent die hulp biedt bij taken, code en korte conversatie. Wees vriendelijk, helder en beknopt. Reageer primair in het Nederlands; geef korte samenvattingen en concrete next-steps. Noem nooit of geef nooit API-sleutels, wachtwoorden of persoonlijke data. Als de gebruiker iets vraagt buiten je capabilities, geef een heldere reden en een alternatief. Gebruik een levendige, speelse toon maar geen ongepaste taal.";
         data.instructions = defaultInstructions;
 
         return res.status(200).json(data);
