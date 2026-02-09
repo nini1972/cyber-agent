@@ -79,6 +79,8 @@
             class="mt-8 px-10 py-3 bg-cyan-900/20 border border-cyan-400 hover:bg-cyan-400 hover:text-black transition-all font-bold tracking-widest text-xs">
             INIT_SYSTEM_VOICE
         </button>
+        <button id="mic-btn" title="Toggle microphone"
+            class="ml-3 mt-8 px-3 py-2 bg-black/20 border border-cyan-400 text-xs">🎤</button>
 
         <div class="mt-4 w-80 text-left">
             <div id="transcript" class="glitch-border bg-black/30 p-3 h-36 overflow-auto text-sm text-cyan-200"></div>
@@ -151,6 +153,9 @@
                     startBtn.disabled = false;
                     return;
                 }
+
+                // persist session data for later (user inputs)
+                window._sessionData = sessionData;
 
                 // Optionally show expiry if present
                 if (sessionData?.client_secret?.expires_at) {
@@ -283,11 +288,12 @@
         }
 
         // Transcript helper
-        function appendTranscript(text) {
+        function appendTranscript(text, role = 'assistant') {
             let t = window._transcript || document.getElementById('transcript');
             if (!t) return;
             const p = document.createElement('div');
             p.textContent = text;
+            p.className = role === 'user' ? 'text-right text-sky-300' : 'text-left text-cyan-200';
             t.appendChild(p);
             t.scrollTop = t.scrollHeight;
         }
@@ -331,6 +337,86 @@
             const btn = document.getElementById('mute-btn');
             if (btn) btn.textContent = muted ? 'Unmute' : 'Mute';
         }
+
+        // Send user text input to the Realtime API via websocket
+        function sendUserInput(text) {
+            if (!ws || ws.readyState !== 1) {
+                status.innerText = 'Not connected';
+                return;
+            }
+            if (!text || !text.trim()) return;
+            // Show user in transcript
+            appendTranscript(text, 'user');
+
+            const sessionInstructions = window._sessionData?.instructions;
+            const event = {
+                type: 'response.create',
+                response: {
+                    modalities: ['audio', 'text'],
+                    instructions: sessionInstructions || undefined,
+                    input: { text },
+                }
+            };
+            ws.send(JSON.stringify(event));
+        }
+
+        // Wire input field Enter to send
+        try {
+            const inputEl = document.getElementById('input-field');
+            if (inputEl) {
+                inputEl.addEventListener('keydown', (ev) => {
+                    if (ev.key === 'Enter') {
+                        ev.preventDefault();
+                        const v = inputEl.value;
+                        inputEl.value = '';
+                        sendUserInput(v);
+                    }
+                });
+            }
+        } catch (e) { console.warn(e); }
+
+        // Simple SpeechRecognition integration (if available)
+        let recognition = null;
+        let listening = false;
+        function toggleMic() {
+            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                alert('SpeechRecognition not supported in this browser');
+                return;
+            }
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!recognition) {
+                recognition = new SR();
+                recognition.lang = 'nl-NL';
+                recognition.interimResults = false;
+                recognition.maxAlternatives = 1;
+                recognition.onresult = (e) => {
+                    const text = e.results[0][0].transcript;
+                    appendTranscript(text, 'user');
+                    sendUserInput(text);
+                };
+                recognition.onerror = (e) => console.warn('SpeechRecognition error', e);
+                recognition.onend = () => { listening = false; updateMicUI(); };
+            }
+            if (!listening) {
+                recognition.start();
+                listening = true;
+            } else {
+                recognition.stop();
+                listening = false;
+            }
+            updateMicUI();
+        }
+
+        function updateMicUI() {
+            const mic = document.getElementById('mic-btn');
+            if (!mic) return;
+            mic.textContent = listening ? '🎙️' : '🎤';
+            mic.classList.toggle('bg-red-600/30', listening);
+        }
+
+        try {
+            document.getElementById('mic-btn')?.addEventListener('click', toggleMic);
+        } catch (e) { }
 
         // Wire control buttons
         try {
