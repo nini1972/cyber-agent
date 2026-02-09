@@ -75,11 +75,21 @@
             <input type="text" id="input-field" name="command" placeholder="COMMAND_INPUT_"
                 class="glitch-border bg-transparent p-3 w-72 text-center text-cyan-400 focus:outline-none placeholder-cyan-900 transition-all">
         </div>
-
         <button id="start-btn" onclick="initCore()"
             class="mt-8 px-10 py-3 bg-cyan-900/20 border border-cyan-400 hover:bg-cyan-400 hover:text-black transition-all font-bold tracking-widest text-xs">
             INIT_SYSTEM_VOICE
         </button>
+
+        <div class="mt-4 w-80 text-left">
+            <div id="transcript" class="glitch-border bg-black/30 p-3 h-36 overflow-auto text-sm text-cyan-200"></div>
+            <div class="mt-2 flex gap-2 justify-center">
+                <button id="disconnect-btn"
+                    class="px-3 py-1 bg-red-700/20 border border-red-500 text-xs">Disconnect</button>
+                <button id="mute-btn" class="px-3 py-1 bg-yellow-700/20 border border-yellow-500 text-xs">Mute</button>
+                <button id="reconnect-btn"
+                    class="px-3 py-1 bg-green-700/20 border border-green-500 text-xs">Reconnect</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -90,6 +100,13 @@
         // --- NIEUW: Realtime AI Koppeling ---
         // global nextStartTime so playAndVisualize can schedule audio chunks
         let nextStartTime = 0;
+
+        // WS/audio globals
+        let ws = null;
+        let audioCtx = null;
+        let analyser = null;
+        let gainNode = null;
+        let muted = false;
 
         async function initCore() {
             status.innerText = "Requesting_Ephemeral_Token...";
@@ -126,16 +143,19 @@
                 }
 
                 // 2. Start de WebSocket
-                const ws = new WebSocket(
+                ws = new WebSocket(
                     "wss://api.openai.com/v1/realtime",
                     ["realtime", "openai-insecure-api-key." + EPHEMERAL_KEY, "openai-beta.realtime-v1"]
                 );
 
                 // 3. Audio Context voor AI-stem
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const analyser = audioCtx.createAnalyser();
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 256;
-                analyser.connect(audioCtx.destination);
+                gainNode = audioCtx.createGain();
+                analyser.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                gainNode.gain.value = muted ? 0 : 1;
 
                 ws.onopen = () => {
                     status.innerText = "System: Neural_Link_Established";
@@ -176,13 +196,13 @@
 
                     // Als de AI audio stuurt, moeten we dit decoderen en visualiseren
                     if (msg.type === "response.audio.delta") {
-                        playAndVisualize(msg.audio, audioCtx, analyser);
+                        playAndVisualize(msg.audio);
                     }
 
                     // Tekstdelays of final text
-                    if (msg.type === 'response.output_text.delta' || msg.type === 'response.create') {
-                        // show brief status or log
-                        console.log('Text event', msg);
+                    if (msg.type === 'response.output_text.delta' || msg.type === 'response.create' || msg.type === 'response.output_text') {
+                        const text = extractTextFromMessage(msg);
+                        if (text) appendTranscript(text);
                     }
                 };
 
@@ -210,7 +230,8 @@
         }
 
         // Helper om Base64 audio van OpenAI af te spelen
-        function playAndVisualize(base64Audio, ctx, analyser) {
+        function playAndVisualize(base64Audio) {
+            if (!audioCtx || !analyser) return;
             // 1. Converteer Base64 naar een ArrayBuffer
             const binaryString = atob(base64Audio);
             const len = binaryString.length;
@@ -226,19 +247,69 @@
             }
 
             // 3. Maak een AudioBuffer (OpenAI Realtime stuurt standaard 24kHz mono)
-            const audioBuffer = ctx.createBuffer(1, float32Data.length, 24000);
+            const audioBuffer = audioCtx.createBuffer(1, float32Data.length, 24000);
             audioBuffer.getChannelData(0).set(float32Data);
 
             // 4. Maak de Audio Source en verbind met de Analyser
-            const source = ctx.createBufferSource();
+            const source = audioCtx.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(analyser); // Dit zorgt ervoor dat de mond beweegt!
-            analyser.connect(ctx.destination);
+            // analyser is already connected to gainNode -> destination
             // 5. Plan het afspelen in (vloeiende overgang tussen chunks)
-            const currentTime = ctx.currentTime;
+            const currentTime = audioCtx.currentTime;
             if (nextStartTime < currentTime) nextStartTime = currentTime;
             source.start(nextStartTime);
             nextStartTime += audioBuffer.duration;
+        }
+
+        // Transcript helper
+        function appendTranscript(text) {
+            let t = window._transcript || document.getElementById('transcript');
+            if (!t) return;
+            const p = document.createElement('div');
+            p.textContent = text;
+            t.appendChild(p);
+            t.scrollTop = t.scrollHeight;
+        }
+
+        // Try to extract text from various message shapes
+        function extractTextFromMessage(msg) {
+            if (!msg) return null;
+            if (msg.delta && (msg.delta.content || msg.delta.text)) return msg.delta.content || msg.delta.text;
+            if (msg.output && msg.output_text) return msg.output_text;
+            if (msg.text) return msg.text;
+            if (msg.response && msg.response.output_text) return msg.response.output_text;
+            // fallback: look for any property with string value
+            for (const k of Object.keys(msg)) {
+                if (typeof msg[k] === 'string' && msg[k].trim()) return msg[k];
+            }
+            return null;
+        }
+
+        // Controls: disconnect, reconnect, mute
+        function disconnectWS() {
+            try {
+                if (ws) {
+                    ws.close();
+                    ws = null;
+                }
+            } catch (e) { console.warn(e); }
+            status.innerText = 'Disconnected';
+            const startBtn = document.getElementById('start-btn');
+            startBtn.classList.remove('hidden');
+            startBtn.disabled = false;
+        }
+
+        function reconnectWS() {
+            disconnectWS();
+            initCore();
+        }
+
+        function toggleMute() {
+            muted = !muted;
+            if (gainNode) gainNode.gain.value = muted ? 0 : 1;
+            const btn = document.getElementById('mute-btn');
+            if (btn) btn.textContent = muted ? 'Unmute' : 'Mute';
         }
     </script>
 </body>
