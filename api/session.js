@@ -106,10 +106,6 @@ export default async function handler(req, res) {
                         model: "gpt-4o-realtime-preview-2024-12-17",
                         modalities: ["audio", "text"],
 
-                        // Enable phoneme timestamps for lipsync
-                        speech: {
-                            phoneme_timestamps: true
-                        },
 
                         // Enable server-side VAD (so you can talk naturally)
                         turn_detection: {
