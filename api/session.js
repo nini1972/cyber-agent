@@ -1,7 +1,3 @@
-import OpenAI from "openai";
-import fetch from "node-fetch";
-import { AbortController } from "abort-controller";
-
 // Simple in-memory rate limiter (per origin/ip) and origin whitelist.
 // Note: serverless instances are ephemeral; for production use a centralized store.
 const rateLimitMap = new Map();
