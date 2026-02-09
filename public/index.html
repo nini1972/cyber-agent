@@ -6,9 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cyber-Agent v1.0 | Agentic UI</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Mono&display=swap" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com');
-
         body {
             background: #050505;
             font-family: 'Space Mono', monospace;
@@ -73,7 +72,7 @@
             <p id="status" class="text-[10px] text-magenta-500 opacity-70 italic uppercase">Status: Awaiting
                 Initialization...</p>
 
-            <input type="text" id="input-field" placeholder="COMMAND_INPUT_"
+            <input type="text" id="input-field" name="command" placeholder="COMMAND_INPUT_"
                 class="glitch-border bg-transparent p-3 w-72 text-center text-cyan-400 focus:outline-none placeholder-cyan-900 transition-all">
         </div>
 
@@ -89,19 +88,28 @@
         const input = document.getElementById('input-field');
 
         // --- NIEUW: Realtime AI Koppeling ---
+        // global nextStartTime so playAndVisualize can schedule audio chunks
+        let nextStartTime = 0;
+
         async function initCore() {
             status.innerText = "Requesting_Ephemeral_Token...";
-            let nextStartTime = 0; // Houdt bij wanneer het volgende audio-stukje moet starten
 
             try {
                 // 1. Haal het beveiligde token op bij je Vercel API
                 const sessionResponse = await fetch("/api/session", { method: "POST" });
                 const sessionData = await sessionResponse.json();
-                const EPHEMERAL_KEY = sessionData.client_secret.value;
+                // sessionData should include client_secret.value when creating ephemeral keys
+                const EPHEMERAL_KEY = sessionData?.client_secret?.value;
+
+                if (!EPHEMERAL_KEY) {
+                    status.innerText = "Error: No ephemeral key returned from /api/session";
+                    console.error('session response', sessionData);
+                    return;
+                }
 
                 // 2. Start de WebSocket
                 const ws = new WebSocket(
-                    "wss://://api.openai.com",
+                    "wss://api.openai.com/v1/realtime",
                     ["realtime", "openai-insecure-api-key." + EPHEMERAL_KEY, "openai-beta.realtime-v1"]
                 );
 
