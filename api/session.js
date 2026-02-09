@@ -12,10 +12,24 @@ export default async function handler(req, res) {
 
     try {
         // Create a lightweight OpenAI client (safe, no network call yet)
-        const client = new OpenAI({ apiKey });
+        // Create an ephemeral session using the Realtime API so the client can connect
+        // Endpoint: POST https://api.openai.com/v1/realtime/sessions
+        const resp = await fetch("https://api.openai.com/v1/realtime/sessions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${apiKey}`,
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ model: "gpt-4o-realtime-preview-2024-12-17", voice: "shimmer" }),
+        });
 
-        // Optional: you can perform a light, non-costly check here. For now respond OK.
-        return res.status(200).json({ ok: true });
+        if (!resp.ok) {
+            const text = await resp.text();
+            return res.status(502).json({ error: "OpenAI realtime session creation failed", detail: text });
+        }
+
+        const data = await resp.json();
+        return res.status(200).json(data);
     } catch (err) {
         return res.status(500).json({ error: err?.message ?? String(err) });
     }
