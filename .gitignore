@@ -3,3 +3,53 @@
 #Ignore vscode AI rules
 .github\instructions\codacy.instructions.md
 .env
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Build output
+dist/
+build/
+.next/
+.vercel/
+out/
+
+# Local env files
+.env
+.env.*.local
+.env.local
+
+# Vite / Next / Nuxt
+.vite/
+.parcel-cache/
+.turbo/
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Misc
+.cache/
+.idea/
+.history/
+coverage/
+coverage-final.json
+
+# TypeScript
+*.tsbuildinfo
