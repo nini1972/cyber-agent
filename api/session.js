@@ -102,7 +102,33 @@ export default async function handler(req, res) {
                         "Authorization": `Bearer ${apiKey}`,
                         "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({ model: "gpt-4o-realtime-preview-2024-12-17", voice: "shimmer" }),
+                    body: JSON.stringify({
+                        model: "gpt-4o-realtime-preview-2024-12-17",
+                        modalities: ["audio", "text"],
+
+                        // Audio output settings
+                        audio: {
+                            voice: "shimmer",
+                            format: "pcm16",
+                            sample_rate: 24000
+                        },
+
+                        // Enable phoneme timestamps for lipsync
+                        speech: {
+                            phoneme_timestamps: true
+                        },
+
+                        // Enable server-side VAD (so you can talk naturally)
+                        turn_detection: {
+                            type: "server_vad"
+                        },
+
+                        // Enable transcription of your microphone input
+                        input_audio_transcription: {
+                            model: "gpt-4o-transcribe"
+                        }
+                    })
+
                 });
 
                 if (!resp.ok) {
