@@ -166,7 +166,8 @@
                         type: "response.create",
                         response: {
                             modalities: ["audio", "text"],
-                            instructions: "Je bent een cyberpunk AI-agent. Begroet de gebruiker kort en krachtig in het Nederlands.",
+                            // Prefer server-provided instructions when available
+                            instructions: sessionData.instructions || "Je bent een cyberpunk AI-agent. Begroet de gebruiker kort en krachtig in het Nederlands.",
                         }
                     };
                     ws.send(JSON.stringify(event));
@@ -310,6 +311,18 @@
             if (gainNode) gainNode.gain.value = muted ? 0 : 1;
             const btn = document.getElementById('mute-btn');
             if (btn) btn.textContent = muted ? 'Unmute' : 'Mute';
+        }
+
+        // Wire control buttons
+        try {
+            const d = document.getElementById('disconnect-btn');
+            const r = document.getElementById('reconnect-btn');
+            const m = document.getElementById('mute-btn');
+            if (d) d.addEventListener('click', disconnectWS);
+            if (r) r.addEventListener('click', reconnectWS);
+            if (m) m.addEventListener('click', toggleMute);
+        } catch (e) {
+            console.warn('Failed to wire control buttons', e);
         }
     </script>
 </body>
