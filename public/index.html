@@ -113,7 +113,8 @@
         const status = document.getElementById('status');
         const input = document.getElementById('input-field');
 
-        document.body.addEventListener("click", () => audioCtx.resume(), { once: true });
+        document.body.addEventListener("click", () => audioCtx?.resume(), { once: true });
+
 
 
         // --- NIEUW: Realtime AI Koppeling ---
