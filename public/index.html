@@ -211,6 +211,9 @@
                         response: {
                             modalities: ["audio", "text"],
                             instructions: instructionToUse,
+                            audio: {
+                                voice: "shimmer", format: "pcm16", sample_rate: 24000
+                            }
                         }
                     };
                     ws.send(JSON.stringify(event));
@@ -420,6 +423,13 @@
                     response: {
                         modalities: ['audio', 'text'],
                         instructions: sessionInstructions || undefined,
+
+                        audio: {
+                            voice: "shimmer",
+                            format: "pcm16",
+                            sample_rate: 24000
+                        },
+
                         input: [
                             {
                                 type: 'message',

@@ -106,13 +106,6 @@ export default async function handler(req, res) {
                         model: "gpt-4o-realtime-preview-2024-12-17",
                         modalities: ["audio", "text"],
 
-                        // Audio output settings
-                        audio: {
-                            voice: "shimmer",
-                            format: "pcm16",
-                            sample_rate: 24000
-                        },
-
                         // Enable phoneme timestamps for lipsync
                         speech: {
                             phoneme_timestamps: true
