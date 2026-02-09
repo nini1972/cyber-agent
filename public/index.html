@@ -413,14 +413,22 @@
             if (!text || !text.trim()) return;
             // Show user in transcript
             appendTranscript(text, 'user');
-
             const sessionInstructions = window._sessionData?.instructions;
+            // The Realtime API expects `response.input` to be an ARRAY of input items.
+            // Each input item can have a role and a structured content array.
             const event = {
                 type: 'response.create',
                 response: {
                     modalities: ['audio', 'text'],
                     instructions: sessionInstructions || undefined,
-                    input: { text },
+                    input: [
+                        {
+                            role: 'user',
+                            content: [
+                                { type: 'input_text', text: text }
+                            ]
+                        }
+                    ],
                 }
             };
             ws.send(JSON.stringify(event));

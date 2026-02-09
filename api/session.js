@@ -50,21 +50,63 @@ export default async function handler(req, res) {
     try {
         // Create an ephemeral session using the Realtime API so the client can connect
         // Endpoint: POST https://api.openai.com/v1/realtime/sessions
-        const resp = await fetch("https://api.openai.com/v1/realtime/sessions", {
-            method: "POST",
-            headers: {
-                "Authorization": `Bearer ${apiKey}`,
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ model: "gpt-4o-realtime-preview-2024-12-17", voice: "shimmer" }),
-        });
+        // Add a small timeout and retry loop because occasionally the OpenAI endpoint
+        // can return 5xx/504 from Cloudflare. We retry a couple times with backoff.
+        const FETCH_TIMEOUT_MS = 15000; // 15s
+        const MAX_SESSION_RETRIES = 2;
 
-        if (!resp.ok) {
-            const text = await resp.text();
-            return res.status(502).json({ error: "OpenAI realtime session creation failed", detail: text });
+        async function fetchWithTimeout(url, opts = {}, timeoutMs = FETCH_TIMEOUT_MS) {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), timeoutMs);
+            try {
+                const resp = await fetch(url, { ...opts, signal: controller.signal });
+                return resp;
+            } finally {
+                clearTimeout(id);
+            }
         }
 
-        const data = await resp.json();
+        let lastErr = null;
+        let data = null;
+        for (let attempt = 0; attempt <= MAX_SESSION_RETRIES; attempt++) {
+            try {
+                const resp = await fetchWithTimeout("https://api.openai.com/v1/realtime/sessions", {
+                    method: "POST",
+                    headers: {
+                        "Authorization": `Bearer ${apiKey}`,
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({ model: "gpt-4o-realtime-preview-2024-12-17", voice: "shimmer" }),
+                });
+
+                if (!resp.ok) {
+                    const text = await resp.text();
+                    lastErr = new Error(`OpenAI session endpoint returned ${resp.status}`);
+                    lastErr.detail = text;
+                    // For 5xx/504/502 try again up to retries; otherwise break
+                    if (resp.status >= 500 && attempt < MAX_SESSION_RETRIES) {
+                        const backoff = 500 * Math.pow(2, attempt);
+                        await new Promise((r) => setTimeout(r, backoff));
+                        continue;
+                    }
+                    // non-retryable or out of attempts
+                    return res.status(502).json({ error: "OpenAI realtime session creation failed", detail: text });
+                }
+
+                data = await resp.json();
+                break;
+            } catch (err) {
+                lastErr = err;
+                // If aborted/timed out, retry a bit
+                if (attempt < MAX_SESSION_RETRIES) {
+                    const backoff = 500 * Math.pow(2, attempt);
+                    await new Promise((r) => setTimeout(r, backoff));
+                    continue;
+                }
+                // out of attempts
+                return res.status(502).json({ error: "OpenAI realtime session creation failed", detail: String(err) });
+            }
+        }
 
         // Attach developer-provided or default instructions to the session response
         const defaultInstructions =
