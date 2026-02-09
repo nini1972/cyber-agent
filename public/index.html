@@ -248,6 +248,11 @@
                 // Luister naar de AI en beweeg de mond
                 ws.onmessage = async (event) => {
                     let msg;
+                    if (msg.type === "response.audio.delta") {
+                        console.log("AUDIO CHUNK RECEIVED", msg.delta.length);
+                        handleAudioChunk(msg.delta);
+                    }
+
                     try {
                         msg = JSON.parse(event.data);
                     } catch {
