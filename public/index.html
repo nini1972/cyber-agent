@@ -350,6 +350,10 @@
             if (!msg) return null;
             if (msg.delta && (msg.delta.content || msg.delta.text)) return msg.delta.content || msg.delta.text;
             if (msg.audio_transcript && (msg.audio_transcript.text || msg.audio_transcript.content)) return msg.audio_transcript.text || msg.audio_transcript.content;
+            if (msg.content_part && msg.content_part.text) return msg.content_part.text;
+            if (msg.message && msg.message.content && Array.isArray(msg.message.content)) {
+                return msg.message.content.map((c) => (typeof c === 'string' ? c : c?.text)).filter(Boolean).join(' ');
+            }
             if (msg?.delta?.content && Array.isArray(msg.delta.content)) {
                 // try to pull text from structured content
                 for (const c of msg.delta.content) {
@@ -357,7 +361,24 @@
                     if (c?.text) return c.text;
                 }
             }
+            if (msg?.response?.content && Array.isArray(msg.response.content)) {
+                for (const c of msg.response.content) {
+                    if (typeof c === 'string') return c;
+                    if (c?.text) return c.text;
+                }
+            }
             if (msg.output && msg.output_text) return msg.output_text;
+            if (msg.output_items && Array.isArray(msg.output_items)) {
+                for (const item of msg.output_items) {
+                    if (item?.content) {
+                        const text = Array.isArray(item.content)
+                            ? item.content.map((c) => (typeof c === 'string' ? c : c?.text)).filter(Boolean).join(' ')
+                            : (typeof item.content === 'string' ? item.content : item.content?.text);
+                        if (text) return text;
+                    }
+                    if (item?.text) return item.text;
+                }
+            }
             if (msg.text) return msg.text;
             if (msg.response && msg.response.output_text) return msg.response.output_text;
             if (msg.response && msg.response.output && Array.isArray(msg.response.output)) {
