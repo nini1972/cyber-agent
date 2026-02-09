@@ -416,6 +416,8 @@
             const sessionInstructions = window._sessionData?.instructions;
             // The Realtime API expects `response.input` to be an ARRAY of input items.
             // Each input item can have a role and a structured content array.
+            // The Realtime API requires each input item to include a `type` property.
+            // Use a simple input_text item for user text.
             const event = {
                 type: 'response.create',
                 response: {
@@ -423,10 +425,9 @@
                     instructions: sessionInstructions || undefined,
                     input: [
                         {
+                            type: 'input_text',
                             role: 'user',
-                            content: [
-                                { type: 'input_text', text: text }
-                            ]
+                            text: text
                         }
                     ],
                 }
