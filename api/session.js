@@ -9,6 +9,7 @@ const RATE_LIMIT_MAX = 8; // max requests per window
 // Read allowed origins from env or fallback to common values
 const DEFAULT_ALLOWED = [
     `https://cyber-agent-rho.vercel.app`,
+    `https://cyber-agent-bzow.vercel.app`,
     `http://localhost:3000`,
     `http://127.0.0.1:3000`,
 ];
@@ -166,7 +167,16 @@ export default async function handler(req, res) {
             "Je bent een cyberpunk AI-agent die hulp biedt bij taken, code en korte conversatie. Wees vriendelijk, helder en beknopt. Reageer primair in het Nederlands; geef korte samenvattingen en concrete next-steps. Noem nooit of geef nooit API-sleutels, wachtwoorden of persoonlijke data. Als de gebruiker iets vraagt buiten je capabilities, geef een heldere reden en een alternatief. Gebruik een levendige, speelse toon maar geen ongepaste taal.";
         data.instructions = defaultInstructions;
 
+        // Normalize client_secret to old format for frontend compatibility
+        if (typeof data.client_secret === "string") {
+            data.client_secret = {
+                value: data.client_secret,
+                expires_at: data.expires_at || null
+            };
+        }
+
         return res.status(200).json(data);
+
     } catch (err) {
         return res.status(500).json({ error: err?.message ?? String(err) });
     }
