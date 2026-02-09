@@ -96,7 +96,18 @@
 
             try {
                 // 1. Haal het beveiligde token op bij je Vercel API
+                const startBtn = document.getElementById('start-btn');
+                startBtn.disabled = true;
+
                 const sessionResponse = await fetch("/api/session", { method: "POST" });
+                if (!sessionResponse.ok) {
+                    const txt = await sessionResponse.text();
+                    status.innerText = "Error: Session endpoint failed";
+                    console.error('session error', sessionResponse.status, txt);
+                    startBtn.disabled = false;
+                    return;
+                }
+
                 const sessionData = await sessionResponse.json();
                 // sessionData should include client_secret.value when creating ephemeral keys
                 const EPHEMERAL_KEY = sessionData?.client_secret?.value;
@@ -104,7 +115,14 @@
                 if (!EPHEMERAL_KEY) {
                     status.innerText = "Error: No ephemeral key returned from /api/session";
                     console.error('session response', sessionData);
+                    startBtn.disabled = false;
                     return;
+                }
+
+                // Optionally show expiry if present
+                if (sessionData?.client_secret?.expires_at) {
+                    const expires = new Date(sessionData.client_secret.expires_at * 1000);
+                    status.innerText = `Ephemeral key acquired (expires ${expires.toLocaleTimeString()})`;
                 }
 
                 // 2. Start de WebSocket
@@ -121,7 +139,7 @@
 
                 ws.onopen = () => {
                     status.innerText = "System: Neural_Link_Established";
-                    document.getElementById('start-btn').classList.add('hidden');
+                    startBtn.classList.add('hidden');
 
                     // Stuur een welkomstbericht naar de AI
                     const event = {
@@ -133,13 +151,38 @@
                     };
                     ws.send(JSON.stringify(event));
                 };
+
+                ws.onerror = (ev) => {
+                    console.error('WebSocket error', ev);
+                    status.innerText = 'WebSocket error';
+                    startBtn.disabled = false;
+                };
+
+                ws.onclose = (ev) => {
+                    console.log('WebSocket closed', ev);
+                    status.innerText = 'Connection closed';
+                    startBtn.classList.remove('hidden');
+                    startBtn.disabled = false;
+                };
                 // Luister naar de AI en beweeg de mond
                 ws.onmessage = (event) => {
-                    const msg = JSON.parse(event.data);
+                    let msg;
+                    try {
+                        msg = JSON.parse(event.data);
+                    } catch (e) {
+                        console.warn('Non-JSON WS message', event.data);
+                        return;
+                    }
 
                     // Als de AI audio stuurt, moeten we dit decoderen en visualiseren
                     if (msg.type === "response.audio.delta") {
                         playAndVisualize(msg.audio, audioCtx, analyser);
+                    }
+
+                    // Tekstdelays of final text
+                    if (msg.type === 'response.output_text.delta' || msg.type === 'response.create') {
+                        // show brief status or log
+                        console.log('Text event', msg);
                     }
                 };
 
