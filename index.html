@@ -182,12 +182,10 @@
             const source = ctx.createBufferSource();
             source.buffer = audioBuffer;
             source.connect(analyser); // Dit zorgt ervoor dat de mond beweegt!
-
+            analyser.connect(ctx.destination);
             // 5. Plan het afspelen in (vloeiende overgang tussen chunks)
             const currentTime = ctx.currentTime;
-            if (nextStartTime < currentTime) {
-                nextStartTime = currentTime;
-            }
+            if (nextStartTime < currentTime) nextStartTime = currentTime;
             source.start(nextStartTime);
             nextStartTime += audioBuffer.duration;
         }
