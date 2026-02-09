@@ -113,6 +113,9 @@
         const status = document.getElementById('status');
         const input = document.getElementById('input-field');
 
+        document.body.addEventListener("click", () => audioCtx.resume(), { once: true });
+
+
         // --- NIEUW: Realtime AI Koppeling ---
         // global nextStartTime so playAndVisualize can schedule audio chunks
         let nextStartTime = 0;
@@ -124,6 +127,11 @@
         let gainNode = null;
         let muted = false;
         let ttlInterval = null;
+
+        function handleAudioChunk(base64) {
+            playAndVisualize(base64);
+        }
+
 
         async function initCore() {
             status.innerText = "Requesting_Ephemeral_Token...";
@@ -252,7 +260,7 @@
 
                     // --- PHONEMES FOR LIPSYNC ---
                     if (msg.type === "response.audio.phoneme") {
-                        animateMouth(msg.phoneme);
+                        animateMouthFromPhoneme(msg.phoneme);
                     }
 
                     // --- TEXT OUTPUT ---
@@ -262,7 +270,7 @@
                 };
 
                 // Start animatie loop voor de mond
-                animateMouth(analyser);
+                animateMouthFromAnalyser(analyser);
 
             } catch (e) {
                 status.innerText = "Error: Link_Failed_Check_Logs";
@@ -270,7 +278,7 @@
             }
 
             // Functie om de mond te laten bewegen op de AI-stem
-            function animateMouth(analyser) {
+            function animateMouthFromAnalyser(analyser) {
                 const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
                 function loop() {
@@ -282,6 +290,12 @@
                 }
                 loop();
             }
+
+            function animateMouthFromPhoneme(phoneme) {
+                // optional: simple mouth pulse
+                mouth.setAttribute('d', `M 70 135 Q 100 150 130 135`);
+            }
+
 
             // Helper om Base64 audio van OpenAI af te spelen
             function playAndVisualize(base64Audio) {
