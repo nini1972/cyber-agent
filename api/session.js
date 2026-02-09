@@ -19,12 +19,38 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
 // Vercel Serverless handler that verifies the API key and returns a small status
 // Replace the body with your desired OpenAI calls (ephemeral key creation, etc.).
 export default async function handler(req, res) {
-    // Basic origin check
-    const origin = req.headers.origin || req.headers.referer || "";
-    if (allowedOrigins.length > 0 && origin) {
-        const originOnly = origin.replace(/\/(?:.*)$/, "");
-        if (!allowedOrigins.includes(originOnly) && !allowedOrigins.includes(origin)) {
-            return res.status(403).json({ error: "Origin not allowed" });
+    // Basic origin check (robust): normalize origin or referer, allow partial matches,
+    // and return helpful debug info on failure so it's easy to fix allowed origins.
+    const rawOrigin = (req.headers.origin || req.headers.referer || "").toString();
+    if (allowedOrigins.length > 0 && rawOrigin) {
+        let originToCheck = rawOrigin;
+        try {
+            // If referer is a full URL, extract its origin
+            if (originToCheck && originToCheck.includes('://')) {
+                originToCheck = new URL(originToCheck).origin;
+            }
+        } catch (e) {
+            // keep rawOrigin if URL parsing fails
+            originToCheck = rawOrigin;
+        }
+
+        const normalizedAllowed = allowedOrigins.map((a) => a.replace(/\/$/, '').toLowerCase());
+        const normalizedOrigin = originToCheck.replace(/\/$/, '').toLowerCase();
+
+        const ok = normalizedAllowed.some((a) => {
+            // allow exact origin, or origin that starts with allowed entry
+            if (!a) return false;
+            if (normalizedOrigin === a) return true;
+            if (normalizedOrigin.startsWith(a)) return true;
+            // also allow matching by hostname only (strip protocol)
+            const aHost = a.replace(/^https?:\/\//, '');
+            if (normalizedOrigin.includes(aHost)) return true;
+            return false;
+        });
+
+        if (!ok) {
+            // Return origin and allowed list to help debugging (no secrets here)
+            return res.status(403).json({ error: "Origin not allowed", origin: originToCheck, allowed: normalizedAllowed });
         }
     }
 
