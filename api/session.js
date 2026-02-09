@@ -1,4 +1,6 @@
 import OpenAI from "openai";
+import fetch from "node-fetch";
+import { AbortController } from "abort-controller";
 
 // Simple in-memory rate limiter (per origin/ip) and origin whitelist.
 // Note: serverless instances are ephemeral; for production use a centralized store.
@@ -16,6 +18,18 @@ const DEFAULT_ALLOWED = [
 const allowedOrigins = process.env.ALLOWED_ORIGINS
     ? process.env.ALLOWED_ORIGINS.split(",").map((s) => s.trim()).filter(Boolean)
     : DEFAULT_ALLOWED;
+
+// Fetch with timeout utility function
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 15000) {
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const resp = await fetch(url, { ...opts, signal: controller.signal });
+        return resp;
+    } finally {
+        clearTimeout(id);
+    }
+}
 
 // Vercel Serverless handler that verifies the API key and returns a small status
 // Replace the body with your desired OpenAI calls (ephemeral key creation, etc.).
@@ -74,25 +88,14 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "OPENAI_API_KEY niet ingesteld in Vercel" });
     }
 
+    const FETCH_TIMEOUT_MS = 15000; // 15s
+    const MAX_SESSION_RETRIES = 2;
+
     try {
         // Create an ephemeral session using the Realtime API so the client can connect
         // Endpoint: POST https://api.openai.com/v1/realtime/sessions
         // Add a small timeout and retry loop because occasionally the OpenAI endpoint
         // can return 5xx/504 from Cloudflare. We retry a couple times with backoff.
-        const FETCH_TIMEOUT_MS = 15000; // 15s
-        const MAX_SESSION_RETRIES = 2;
-
-        async function fetchWithTimeout(url, opts = {}, timeoutMs = FETCH_TIMEOUT_MS) {
-            const controller = new AbortController();
-            const id = setTimeout(() => controller.abort(), timeoutMs);
-            try {
-                const resp = await fetch(url, { ...opts, signal: controller.signal });
-                return resp;
-            } finally {
-                clearTimeout(id);
-            }
-        }
-
         let lastErr = null;
         let data = null;
         for (let attempt = 0; attempt <= MAX_SESSION_RETRIES; attempt++) {

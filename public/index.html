@@ -255,322 +255,283 @@
                     }
                 };
 
+                // Start animatie loop voor de mond
+                animateMouth(analyser);
 
-                console.debug('WS message', msg);
-                // Explicit error / rate-limit handling
-                if (msg.type === 'error' || msg.type === 'fatal.error' || msg.error) {
-                    const emsg = msg.error?.message || (msg.error?.type ? `${msg.error.type}` : JSON.stringify(msg));
-                    appendTranscript(`Error: ${emsg}`, 'assistant');
-                    updateConnectionState('error');
-                    console.error('Realtime error', msg);
-                    return;
-                }
-
-                if (msg.type === 'rate_limits.updated') {
-                    appendTranscript('[notice] rate limits updated', 'assistant');
-                    return;
-                }
-
-                // Als de AI audio stuurt, moeten we dit decoderen en visualiseren
-                if (msg.type === "response.audio.delta" && msg.delta) {
-                    playAndVisualize(msg.delta);
-                }
-
-
-                // When response is finished
-                if (msg.type === 'response.done') {
-                    appendTranscript('[assistant finished]', 'assistant');
-                    updateConnectionState('idle');
-                    return;
-                }
-
-                // Tekstdelays of final text
-                const text = extractTextFromMessage(msg);
-                if (text) {
-                    appendTranscript(text, 'assistant');
-                } else if (msg.type && !msg.type.startsWith('response.audio')) {
-                    appendTranscript(`[debug] ${msg.type}`, 'assistant');
-                }
-
+            } catch (e) {
+                status.innerText = "Error: Link_Failed_Check_Logs";
+                console.error(e);
             }
 
-            // Start animatie loop voor de mond
-            animateMouth(analyser);
+            // Functie om de mond te laten bewegen op de AI-stem
+            function animateMouth(analyser) {
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-        } catch (e) {
-            status.innerText = "Error: Link_Failed_Check_Logs";
-            console.error(e);
-        }
-        }
-
-        // Functie om de mond te laten bewegen op de AI-stem
-        function animateMouth(analyser) {
-            const dataArray = new Uint8Array(analyser.frequencyBinCount);
-
-            function loop() {
-                analyser.getByteFrequencyData(dataArray);
-                const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
-                const open = 135 + (avg / 3); // De 'Q' waarde voor de mond-curve
-                mouth.setAttribute('d', `M 70 135 Q 100 ${open} 130 135`);
-                requestAnimationFrame(loop);
-            }
-            loop();
-        }
-
-        // Helper om Base64 audio van OpenAI af te spelen
-        function playAndVisualize(base64Audio) {
-            if (!audioCtx || !analyser) return;
-            // 1. Converteer Base64 naar een ArrayBuffer
-            const binaryString = atob(base64Audio);
-            const len = binaryString.length;
-            const bytes = new Int16Array(len / 2);
-            for (let i = 0; i < len; i += 2) {
-                bytes[i / 2] = (binaryString.charCodeAt(i + 1) << 8) | binaryString.charCodeAt(i);
-            }
-
-            // 2. Converteer Int16 PCM naar Float32 (wat Web Audio nodig heeft)
-            const float32Data = new Float32Array(bytes.length);
-            for (let i = 0; i < bytes.length; i++) {
-                float32Data[i] = bytes[i] / 32768.0;
-            }
-
-            // 3. Maak een AudioBuffer (OpenAI Realtime stuurt standaard 24kHz mono)
-            const audioBuffer = audioCtx.createBuffer(1, float32Data.length, 24000);
-            audioBuffer.getChannelData(0).set(float32Data);
-
-            // 4. Maak de Audio Source en verbind met de Analyser
-            const source = audioCtx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(analyser); // Dit zorgt ervoor dat de mond beweegt!
-            // analyser is already connected to gainNode -> destination
-            // 5. Plan het afspelen in (vloeiende overgang tussen chunks)
-            const currentTime = audioCtx.currentTime;
-            if (nextStartTime < currentTime) nextStartTime = currentTime;
-            source.start(nextStartTime);
-            nextStartTime += audioBuffer.duration;
-        }
-
-        // Transcript helper
-        function appendTranscript(text, role = 'assistant') {
-            let t = window._transcript || document.getElementById('transcript');
-            if (!t) return;
-            const p = document.createElement('div');
-            p.textContent = text;
-            p.className = role === 'user' ? 'text-right text-sky-300' : 'text-left text-cyan-200';
-            t.appendChild(p);
-            t.scrollTop = t.scrollHeight;
-        }
-
-        // Try to extract text from various message shapes
-        function extractTextFromMessage(msg) {
-            if (!msg) return null;
-            if (msg.delta && (msg.delta.content || msg.delta.text)) return msg.delta.content || msg.delta.text;
-            if (msg.audio_transcript && (msg.audio_transcript.text || msg.audio_transcript.content)) return msg.audio_transcript.text || msg.audio_transcript.content;
-            if (msg.content_part && msg.content_part.text) return msg.content_part.text;
-            if (msg.message && msg.message.content && Array.isArray(msg.message.content)) {
-                return msg.message.content.map((c) => (typeof c === 'string' ? c : c?.text)).filter(Boolean).join(' ');
-            }
-            if (msg?.delta?.content && Array.isArray(msg.delta.content)) {
-                // try to pull text from structured content
-                for (const c of msg.delta.content) {
-                    if (typeof c === 'string') return c;
-                    if (c?.text) return c.text;
+                function loop() {
+                    analyser.getByteFrequencyData(dataArray);
+                    const avg = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                    const open = 135 + (avg / 3); // De 'Q' waarde voor de mond-curve
+                    mouth.setAttribute('d', `M 70 135 Q 100 ${open} 130 135`);
+                    requestAnimationFrame(loop);
                 }
+                loop();
             }
-            if (msg?.response?.content && Array.isArray(msg.response.content)) {
-                for (const c of msg.response.content) {
-                    if (typeof c === 'string') return c;
-                    if (c?.text) return c.text;
+
+            // Helper om Base64 audio van OpenAI af te spelen
+            function playAndVisualize(base64Audio) {
+                if (!audioCtx || !analyser) return;
+                // 1. Converteer Base64 naar een ArrayBuffer
+                const binaryString = atob(base64Audio);
+                const len = binaryString.length;
+                const bytes = new Int16Array(len / 2);
+                for (let i = 0; i < len; i += 2) {
+                    bytes[i / 2] = (binaryString.charCodeAt(i + 1) << 8) | binaryString.charCodeAt(i);
                 }
+
+                // 2. Converteer Int16 PCM naar Float32 (wat Web Audio nodig heeft)
+                const float32Data = new Float32Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) {
+                    float32Data[i] = bytes[i] / 32768.0;
+                }
+
+                // 3. Maak een AudioBuffer (OpenAI Realtime stuurt standaard 24kHz mono)
+                const audioBuffer = audioCtx.createBuffer(1, float32Data.length, 24000);
+                audioBuffer.getChannelData(0).set(float32Data);
+
+                // 4. Maak de Audio Source en verbind met de Analyser
+                const source = audioCtx.createBufferSource();
+                source.buffer = audioBuffer;
+                source.connect(analyser); // Dit zorgt ervoor dat de mond beweegt!
+                // analyser is already connected to gainNode -> destination
+                // 5. Plan het afspelen in (vloeiende overgang tussen chunks)
+                const currentTime = audioCtx.currentTime;
+                if (nextStartTime < currentTime) nextStartTime = currentTime;
+                source.start(nextStartTime);
+                nextStartTime += audioBuffer.duration;
             }
-            if (msg.output && msg.output_text) return msg.output_text;
-            if (msg.output_items && Array.isArray(msg.output_items)) {
-                for (const item of msg.output_items) {
-                    if (item?.content) {
-                        const text = Array.isArray(item.content)
-                            ? item.content.map((c) => (typeof c === 'string' ? c : c?.text)).filter(Boolean).join(' ')
-                            : (typeof item.content === 'string' ? item.content : item.content?.text);
-                        if (text) return text;
+
+            // Transcript helper
+            function appendTranscript(text, role = 'assistant') {
+                let t = window._transcript || document.getElementById('transcript');
+                if (!t) return;
+                const p = document.createElement('div');
+                p.textContent = text;
+                p.className = role === 'user' ? 'text-right text-sky-300' : 'text-left text-cyan-200';
+                t.appendChild(p);
+                t.scrollTop = t.scrollHeight;
+            }
+
+            // Try to extract text from various message shapes
+            function extractTextFromMessage(msg) {
+                if (!msg) return null;
+                if (msg.delta && (msg.delta.content || msg.delta.text)) return msg.delta.content || msg.delta.text;
+                if (msg.audio_transcript && (msg.audio_transcript.text || msg.audio_transcript.content)) return msg.audio_transcript.text || msg.audio_transcript.content;
+                if (msg.content_part && msg.content_part.text) return msg.content_part.text;
+                if (msg.message && msg.message.content && Array.isArray(msg.message.content)) {
+                    return msg.message.content.map((c) => (typeof c === 'string' ? c : c?.text)).filter(Boolean).join(' ');
+                }
+                if (msg?.delta?.content && Array.isArray(msg.delta.content)) {
+                    // try to pull text from structured content
+                    for (const c of msg.delta.content) {
+                        if (typeof c === 'string') return c;
+                        if (c?.text) return c.text;
                     }
-                    if (item?.text) return item.text;
                 }
-            }
-            if (msg.text) return msg.text;
-            if (msg.response && msg.response.output_text) return msg.response.output_text;
-            if (msg.response && msg.response.output && Array.isArray(msg.response.output)) {
-                // common structured output
-                const parts = msg.response.output.map(p => (p?.content || p?.text || p)).filter(Boolean);
-                if (parts.length) return parts.join(' ');
-            }
-            // fallback: look for any property with string value
-            for (const k of Object.keys(msg)) {
-                if (typeof msg[k] === 'string' && msg[k].trim()) return msg[k];
-            }
-            return null;
-        }
-
-        // Controls: disconnect, reconnect, mute
-        function disconnectWS() {
-            try {
-                if (ws) {
-                    ws.close();
-                    ws = null;
+                if (msg?.response?.content && Array.isArray(msg.response.content)) {
+                    for (const c of msg.response.content) {
+                        if (typeof c === 'string') return c;
+                        if (c?.text) return c.text;
+                    }
                 }
-            } catch (e) { console.warn(e); }
-            status.innerText = 'Disconnected';
-            const startBtn = document.getElementById('start-btn');
-            startBtn.classList.remove('hidden');
-            startBtn.disabled = false;
-            // clear TTL timer when disconnected
-            if (ttlInterval) {
-                clearInterval(ttlInterval);
-                ttlInterval = null;
-            }
-            updateConnectionState('disconnected');
-        }
-
-        function reconnectWS() {
-            disconnectWS();
-            initCore();
-        }
-
-        function toggleMute() {
-            muted = !muted;
-            if (gainNode) gainNode.gain.value = muted ? 0 : 1;
-            const btn = document.getElementById('mute-btn');
-            if (btn) btn.textContent = muted ? 'Unmute' : 'Mute';
-        }
-
-        // Send user text input to the Realtime API via websocket
-        function sendUserInput(text) {
-            if (!ws || ws.readyState !== 1) {
-                status.innerText = 'Not connected';
-                return;
-            }
-            if (!text || !text.trim()) return;
-            // Show user in transcript
-            appendTranscript(text, 'user');
-            const sessionInstructions = window._sessionData?.instructions;
-            // The Realtime API expects `response.input` to be an ARRAY of input items.
-            // Each input item can have a role and a structured content array.
-            // The Realtime API expects input items with type 'message'.
-            // Each message contains a content array; use a simple text content item.
-            const event = {
-                type: 'response.create',
-                response: {
-                    modalities: ['audio', 'text'],
-                    instructions: sessionInstructions || undefined,
-                    input: [
-                        {
-                            type: 'message',
-                            role: 'user',
-                            content: [
-                                { type: 'input_text', text: text }
-                            ]
+                if (msg.output && msg.output_text) return msg.output_text;
+                if (msg.output_items && Array.isArray(msg.output_items)) {
+                    for (const item of msg.output_items) {
+                        if (item?.content) {
+                            const text = Array.isArray(item.content)
+                                ? item.content.map((c) => (typeof c === 'string' ? c : c?.text)).filter(Boolean).join(' ')
+                                : (typeof item.content === 'string' ? item.content : item.content?.text);
+                            if (text) return text;
                         }
-                    ],
-                }
-            };
-            ws.send(JSON.stringify(event));
-        }
-
-        // Wire input field Enter to send
-        try {
-            const inputEl = document.getElementById('input-field');
-            if (inputEl) {
-                inputEl.addEventListener('keydown', (ev) => {
-                    if (ev.key === 'Enter') {
-                        ev.preventDefault();
-                        const v = inputEl.value;
-                        inputEl.value = '';
-                        sendUserInput(v);
+                        if (item?.text) return item.text;
                     }
-                });
+                }
+                if (msg.text) return msg.text;
+                if (msg.response && msg.response.output_text) return msg.response.output_text;
+                if (msg.response && msg.response.output && Array.isArray(msg.response.output)) {
+                    // common structured output
+                    const parts = msg.response.output.map(p => (p?.content || p?.text || p)).filter(Boolean);
+                    if (parts.length) return parts.join(' ');
+                }
+                // fallback: look for any property with string value
+                for (const k of Object.keys(msg)) {
+                    if (typeof msg[k] === 'string' && msg[k].trim()) return msg[k];
+                }
+                return null;
             }
-        } catch (e) { console.warn(e); }
 
-        // Simple SpeechRecognition integration (if available)
-        let recognition = null;
-        let listening = false;
-        function toggleMic() {
-            if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-                alert('SpeechRecognition not supported in this browser');
-                return;
-            }
-            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!recognition) {
-                recognition = new SR();
-                recognition.lang = 'nl-NL';
-                recognition.interimResults = false;
-                recognition.maxAlternatives = 1;
-                recognition.onresult = (e) => {
-                    const text = e.results[0][0].transcript;
-                    appendTranscript(text, 'user');
-                    sendUserInput(text);
-                };
-                recognition.onerror = (e) => console.warn('SpeechRecognition error', e);
-                recognition.onend = () => { listening = false; updateMicUI(); };
-            }
-            if (!listening) {
-                recognition.start();
-                listening = true;
-            } else {
-                recognition.stop();
-                listening = false;
-            }
-            updateMicUI();
-        }
-
-        function updateMicUI() {
-            const mic = document.getElementById('mic-btn');
-            if (!mic) return;
-            mic.textContent = listening ? '🎙️' : '🎤';
-            mic.classList.toggle('bg-red-600/30', listening);
-        }
-
-        try {
-            document.getElementById('mic-btn')?.addEventListener('click', toggleMic);
-        } catch (e) { }
-
-        // Connection state/TTL helpers
-        function updateConnectionState(state) {
-            const el = document.getElementById('conn-state');
-            if (!el) return;
-            el.textContent = `conn: ${state}`;
-            el.className = state === 'connected' ? 'text-[10px] text-green-300' : state === 'error' ? 'text-[10px] text-red-400' : 'text-[10px] text-cyan-300';
-        }
-
-        function startTTLTimer(untilMs) {
-            const el = document.getElementById('ttl-indicator');
-            if (!el) return;
-            if (ttlInterval) clearInterval(ttlInterval);
-            function update() {
-                const now = Date.now();
-                const remaining = Math.max(0, Math.floor((untilMs - now) / 1000));
-                if (remaining <= 0) {
-                    el.textContent = 'ttl: expired';
+            // Controls: disconnect, reconnect, mute
+            function disconnectWS() {
+                try {
+                    if (ws) {
+                        ws.close();
+                        ws = null;
+                    }
+                } catch (e) { console.warn(e); }
+                status.innerText = 'Disconnected';
+                const startBtn = document.getElementById('start-btn');
+                startBtn.classList.remove('hidden');
+                startBtn.disabled = false;
+                // clear TTL timer when disconnected
+                if (ttlInterval) {
                     clearInterval(ttlInterval);
                     ttlInterval = null;
-                } else {
-                    const m = Math.floor(remaining / 60);
-                    const s = remaining % 60;
-                    el.textContent = `ttl: ${m}m ${s}s`;
                 }
+                updateConnectionState('disconnected');
             }
-            update();
-            ttlInterval = setInterval(update, 1000);
-        }
 
-        // Wire control buttons
-        try {
-            const d = document.getElementById('disconnect-btn');
-            const r = document.getElementById('reconnect-btn');
-            const m = document.getElementById('mute-btn');
-            if (d) d.addEventListener('click', disconnectWS);
-            if (r) r.addEventListener('click', reconnectWS);
-            if (m) m.addEventListener('click', toggleMute);
-        } catch (e) {
-            console.warn('Failed to wire control buttons', e);
+            function reconnectWS() {
+                disconnectWS();
+                initCore();
+            }
+
+            function toggleMute() {
+                muted = !muted;
+                if (gainNode) gainNode.gain.value = muted ? 0 : 1;
+                const btn = document.getElementById('mute-btn');
+                if (btn) btn.textContent = muted ? 'Unmute' : 'Mute';
+            }
+
+            // Send user text input to the Realtime API via websocket
+            function sendUserInput(text) {
+                if (!ws || ws.readyState !== 1) {
+                    status.innerText = 'Not connected';
+                    return;
+                }
+                if (!text || !text.trim()) return;
+                // Show user in transcript
+                appendTranscript(text, 'user');
+                const sessionInstructions = window._sessionData?.instructions;
+                // The Realtime API expects `response.input` to be an ARRAY of input items.
+                // Each input item can have a role and a structured content array.
+                // The Realtime API expects input items with type 'message'.
+                // Each message contains a content array; use a simple text content item.
+                const event = {
+                    type: 'response.create',
+                    response: {
+                        modalities: ['audio', 'text'],
+                        instructions: sessionInstructions || undefined,
+                        input: [
+                            {
+                                type: 'message',
+                                role: 'user',
+                                content: [
+                                    { type: 'input_text', text: text }
+                                ]
+                            }
+                        ],
+                    }
+                };
+                ws.send(JSON.stringify(event));
+            }
+
+            // Wire input field Enter to send
+            try {
+                const inputEl = document.getElementById('input-field');
+                if (inputEl) {
+                    inputEl.addEventListener('keydown', (ev) => {
+                        if (ev.key === 'Enter') {
+                            ev.preventDefault();
+                            const v = inputEl.value;
+                            inputEl.value = '';
+                            sendUserInput(v);
+                        }
+                    });
+                }
+            } catch (e) { console.warn(e); }
+
+            // Simple SpeechRecognition integration (if available)
+            let recognition = null;
+            let listening = false;
+            function toggleMic() {
+                if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+                    alert('SpeechRecognition not supported in this browser');
+                    return;
+                }
+                const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!recognition) {
+                    recognition = new SR();
+                    recognition.lang = 'nl-NL';
+                    recognition.interimResults = false;
+                    recognition.maxAlternatives = 1;
+                    recognition.onresult = (e) => {
+                        const text = e.results[0][0].transcript;
+                        appendTranscript(text, 'user');
+                        sendUserInput(text);
+                    };
+                    recognition.onerror = (e) => console.warn('SpeechRecognition error', e);
+                    recognition.onend = () => { listening = false; updateMicUI(); };
+                }
+                if (!listening) {
+                    recognition.start();
+                    listening = true;
+                } else {
+                    recognition.stop();
+                    listening = false;
+                }
+                updateMicUI();
+            }
+
+            function updateMicUI() {
+                const mic = document.getElementById('mic-btn');
+                if (!mic) return;
+                mic.textContent = listening ? '🎙️' : '🎤';
+                mic.classList.toggle('bg-red-600/30', listening);
+            }
+
+            try {
+                document.getElementById('mic-btn')?.addEventListener('click', toggleMic);
+            } catch (e) { }
+
+            // Connection state/TTL helpers
+            function updateConnectionState(state) {
+                const el = document.getElementById('conn-state');
+                if (!el) return;
+                el.textContent = `conn: ${state}`;
+                el.className = state === 'connected' ? 'text-[10px] text-green-300' : state === 'error' ? 'text-[10px] text-red-400' : 'text-[10px] text-cyan-300';
+            }
+
+            function startTTLTimer(untilMs) {
+                const el = document.getElementById('ttl-indicator');
+                if (!el) return;
+                if (ttlInterval) clearInterval(ttlInterval);
+                function update() {
+                    const now = Date.now();
+                    const remaining = Math.max(0, Math.floor((untilMs - now) / 1000));
+                    if (remaining <= 0) {
+                        el.textContent = 'ttl: expired';
+                        clearInterval(ttlInterval);
+                        ttlInterval = null;
+                    } else {
+                        const m = Math.floor(remaining / 60);
+                        const s = remaining % 60;
+                        el.textContent = `ttl: ${m}m ${s}s`;
+                    }
+                }
+                update();
+                ttlInterval = setInterval(update, 1000);
+            }
+
+            // Wire control buttons
+            try {
+                const d = document.getElementById('disconnect-btn');
+                const r = document.getElementById('reconnect-btn');
+                const m = document.getElementById('mute-btn');
+                if (d) d.addEventListener('click', disconnectWS);
+                if (r) r.addEventListener('click', reconnectWS);
+                if (m) m.addEventListener('click', toggleMute);
+            } catch (e) {
+                console.warn('Failed to wire control buttons', e);
+            }
         }
     </script>
 </body>
