@@ -445,6 +445,16 @@
                     }
                 } catch (e) { console.warn(e); }
 
+                // Reset microphone button visual state
+                try {
+                    const mic = document.getElementById('mic-btn');
+                    if (mic) {
+                        mic.textContent = '🎤';
+                        mic.classList.remove('bg-amber-700/30', 'border-amber-500');
+                        mic.classList.add('bg-black/20', 'border-cyan-400');
+                    }
+                } catch (e) { console.warn(e); }
+
                 status.innerText = 'Disconnected';
                 const startBtn = document.getElementById('start-btn');
                 startBtn.classList.remove('hidden');
@@ -565,7 +575,13 @@
                 const mic = document.getElementById('mic-btn');
                 if (!mic) return;
                 mic.textContent = listening ? '🎙️' : '🎤';
-                mic.classList.toggle('bg-red-600/30', listening);
+                if (listening) {
+                    mic.classList.remove('bg-black/20', 'border-cyan-400');
+                    mic.classList.add('bg-amber-700/30', 'border-amber-500');
+                } else {
+                    mic.classList.remove('bg-amber-700/30', 'border-amber-500');
+                    mic.classList.add('bg-black/20', 'border-cyan-400');
+                }
             }
 
             try {
