@@ -129,10 +129,6 @@
         let muted = false;
         let ttlInterval = null;
 
-        function handleAudioChunk(base64) {
-            playAndVisualize(base64);
-        }
-
 
         async function initCore() {
             status.innerText = "Requesting_Ephemeral_Token...";
@@ -339,6 +335,10 @@
                 if (nextStartTime < currentTime) nextStartTime = currentTime;
                 source.start(nextStartTime);
                 nextStartTime += audioBuffer.duration;
+            }
+
+            function handleAudioChunk(base64) {
+                playAndVisualize(base64);
             }
 
             // Transcript helper
