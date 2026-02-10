@@ -160,6 +160,11 @@
             // SpeechRecognition variables (recreated on each connection)
             let recognition = null;
             let listening = false;
+            let micStream = null;
+            let micAnalyser = null;
+            let micDataArray = null;
+            let micAnimationId = null;
+            let userStopped = false; // Track if user explicitly stopped the microphone
 
             try {
                 // 1. Haal het beveiligde token op bij je Vercel API
@@ -445,6 +450,9 @@
                     }
                 } catch (e) { console.warn(e); }
 
+                // Clean up microphone stream
+                stopMicStream();
+
                 // Reset microphone button visual state
                 try {
                     const mic = document.getElementById('mic-btn');
@@ -554,38 +562,76 @@
                         if (e.error !== 'aborted') {
                             listening = false;
                             updateMicUI();
+                            stopMicStream();
                         }
                     };
                     recognition.onend = () => {
-                        // Don't automatically reset listening state - only reset when user explicitly clicks the button
-                        console.log('SpeechRecognition ended');
+                        // Automatically stop recording when user stops speaking
+                        listening = false;
+                        stopMicStream();
+                        updateMicUI();
                     };
                 }
                 if (!listening) {
                     recognition.start();
                     listening = true;
+                    startMicStream();
                 } else {
                     recognition.stop();
                     listening = false;
+                    stopMicStream();
                 }
                 updateMicUI();
+            }
+
+            // Start microphone stream to detect audio levels
+            async function startMicStream() {
+                try {
+                    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const source = audioCtx.createMediaStreamSource(micStream);
+                    micAnalyser = audioCtx.createAnalyser();
+                    micAnalyser.fftSize = 256;
+                    source.connect(micAnalyser);
+                    micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+                    monitorMicAudio();
+                } catch (e) {
+                    console.error('Error accessing microphone:', e);
+                }
+            }
+
+            // Stop microphone stream
+            function stopMicStream() {
+                if (micStream) {
+                    micStream.getTracks().forEach(track => track.stop());
+                    micStream = null;
+                }
+                if (micAnimationId) {
+                    cancelAnimationFrame(micAnimationId);
+                    micAnimationId = null;
+                }
+                micAnalyser = null;
+                micDataArray = null;
+            }
+
+            // Monitor microphone audio levels (color is handled by updateMicUI based on listening state)
+            function monitorMicAudio() {
+                if (!micAnalyser || !micDataArray) return;
+                micAnalyser.getByteFrequencyData(micDataArray);
+                micAnimationId = requestAnimationFrame(monitorMicAudio);
             }
 
             function updateMicUI() {
                 const mic = document.getElementById('mic-btn');
                 if (!mic) return;
-                console.log('updateMicUI called, listening:', listening);
                 mic.textContent = listening ? '🎙️' : '🎤';
                 if (listening) {
                     mic.classList.remove('bg-black/20', 'border-cyan-400');
                     mic.classList.add('bg-amber-700/30', 'border-amber-500');
-                    console.log('Mic button set to active state');
                 } else {
                     mic.classList.remove('bg-amber-700/30', 'border-amber-500');
                     mic.classList.add('bg-black/20', 'border-cyan-400');
-                    console.log('Mic button set to inactive state');
                 }
-                console.log('Mic button classes:', mic.className);
             }
 
             try {
