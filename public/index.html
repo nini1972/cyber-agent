@@ -131,6 +131,30 @@
 
 
         async function initCore() {
+            // FULL RESET BEFORE STARTING A NEW SESSION
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+            ws = null;
+
+            if (ttlInterval) {
+                clearInterval(ttlInterval);
+                ttlInterval = null;
+            }
+
+            if (audioCtx) {
+                try { audioCtx.close(); } catch (e) { }
+            }
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+            analyser = null;
+            gainNode = null;
+            nextStartTime = 0;
+
+
+
+
+            // --- NOW CONTINUE WITH YOUR EXISTING initCore CODE ---
             status.innerText = "Requesting_Ephemeral_Token...";
 
             // SpeechRecognition variables (recreated on each connection)
