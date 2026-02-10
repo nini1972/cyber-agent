@@ -219,13 +219,7 @@
                         type: "response.create",
                         response: {
                             modalities: ["audio", "text"],
-                            instructions: instructionToUse,
-                            audio: {
-                                voice: "shimmer", format: "pcm16", sample_rate: 24000
-                            },
-                            speech: {
-                                phoneme_timestamps: true
-                            }
+                            instructions: instructionToUse
                         }
                     };
                     ws.send(JSON.stringify(event));
@@ -457,16 +451,6 @@
                     response: {
                         modalities: ['audio', 'text'],
                         instructions: sessionInstructions || undefined,
-
-                        audio: {
-                            voice: "shimmer",
-                            format: "pcm16",
-                            sample_rate: 24000
-                        },
-                        speech: {
-                            phoneme_timestamps: true
-                        },
-
                         input: [
                             {
                                 type: 'message',
