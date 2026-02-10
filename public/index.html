@@ -250,9 +250,13 @@
                     let msg;
                     try {
                         msg = JSON.parse(event.data);
-                    } catch {
-                        return; // ignore non‑JSON frames
+                    } catch (e) {
+                        console.error("Failed to parse WebSocket message:", e);
+                        return;
                     }
+
+                    // Log all incoming events for debugging
+                    console.log("WebSocket event:", msg.type, msg);
 
                     // Ignore messages without a type
                     if (!msg || !msg.type) return;
@@ -260,7 +264,11 @@
                     // --- AUDIO CHUNKS ---
                     if (msg.type === "response.audio.delta") {
                         console.log("AUDIO CHUNK RECEIVED", msg.delta.length);
-                        handleAudioChunk(msg.delta);
+                        try {
+                            handleAudioChunk(msg.delta);
+                        } catch (e) {
+                            console.error("Error handling audio chunk:", e);
+                        }
                     }
 
                     // --- PHONEMES FOR LIPSYNC ---
@@ -269,7 +277,7 @@
                     }
 
                     // --- TEXT OUTPUT ---
-                    if (msg.type === "response.output_text.delta") {
+                    if (msg.type === "response.text.delta") {
                         appendTranscript(msg.delta, "assistant");
                     }
                 };
@@ -305,6 +313,10 @@
             // Helper om Base64 audio van OpenAI af te spelen
             function playAndVisualize(base64Audio) {
                 if (!audioCtx || !analyser) return;
+                if (!base64Audio || typeof base64Audio !== 'string') {
+                    console.error("Invalid audio data:", base64Audio);
+                    return;
+                }
                 // 1. Converteer Base64 naar een ArrayBuffer
                 const binaryString = atob(base64Audio);
                 const len = binaryString.length;

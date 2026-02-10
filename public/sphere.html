@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Glowing 3D Sphere</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        
+        #info {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            text-align: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <div id="info">Move your mouse to interact with the sphere</div>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // Mouse tracking
+        let mouseX = 0;
+        let mouseY = 0;
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+        
+        // Create the main sphere
+        const sphereGeometry = new THREE.SphereGeometry(2, 64, 64);
+        
+        // Create a glowing material with emissive properties
+        const sphereMaterial = new THREE.MeshPhongMaterial({
+            color: 0x00ffff,
+            emissive: 0x0088ff,
+            emissiveIntensity: 0.5,
+            shininess: 100,
+            specular: 0xffffff,
+            transparent: true,
+            opacity: 0.9
+        });
+        
+        const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
+        scene.add(sphere);
+        
+        // Create wireframe overlay for extra visual effect
+        const wireframeGeometry = new THREE.SphereGeometry(2.05, 32, 32);
+        const wireframeMaterial = new THREE.MeshBasicMaterial({
+            color: 0xff00ff,
+            wireframe: true,
+            transparent: true,
+            opacity: 0.3
+        });
+        const wireframeSphere = new THREE.Mesh(wireframeGeometry, wireframeMaterial);
+        scene.add(wireframeSphere);
+        
+        // Create outer glow sphere (larger, more transparent)
+        const glowGeometry = new THREE.SphereGeometry(2.5, 32, 32);
+        const glowMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ffff,
+            transparent: true,
+            opacity: 0.1,
+            side: THREE.BackSide
+        });
+        const glowSphere = new THREE.Mesh(glowGeometry, glowMaterial);
+        scene.add(glowSphere);
+        
+        // Add lights
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.5);
+        scene.add(ambientLight);
+        
+        const pointLight1 = new THREE.PointLight(0x00ffff, 2, 100);
+        pointLight1.position.set(5, 5, 5);
+        scene.add(pointLight1);
+        
+        const pointLight2 = new THREE.PointLight(0xff00ff, 2, 100);
+        pointLight2.position.set(-5, -5, 5);
+        scene.add(pointLight2);
+        
+        const pointLight3 = new THREE.PointLight(0x00ff00, 1, 100);
+        pointLight3.position.set(0, 0, -5);
+        scene.add(pointLight3);
+        
+        // Camera position
+        camera.position.z = 6;
+        
+        // Mouse move event listener
+        document.addEventListener('mousemove', (event) => {
+            // Normalize mouse position to range -1 to 1
+            mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+            mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
+            
+            // Calculate target rotation based on mouse position
+            targetRotationY = mouseX * Math.PI;
+            targetRotationX = mouseY * Math.PI * 0.5;
+        });
+        
+        // Touch support for mobile
+        document.addEventListener('touchmove', (event) => {
+            if (event.touches.length > 0) {
+                const touch = event.touches[0];
+                mouseX = (touch.clientX / window.innerWidth) * 2 - 1;
+                mouseY = -(touch.clientY / window.innerHeight) * 2 + 1;
+                
+                targetRotationY = mouseX * Math.PI;
+                targetRotationX = mouseY * Math.PI * 0.5;
+            }
+        });
+        
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Animation variables
+        let time = 0;
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            time += 0.01;
+            
+            // Smooth rotation towards target (mouse interaction)
+            sphere.rotation.y += (targetRotationY - sphere.rotation.y) * 0.05;
+            sphere.rotation.x += (targetRotationX - sphere.rotation.x) * 0.05;
+            
+            // Wireframe follows main sphere with slight offset
+            wireframeSphere.rotation.y = sphere.rotation.y;
+            wireframeSphere.rotation.x = sphere.rotation.x;
+            
+            // Continuous spinning animation
+            sphere.rotation.z += 0.005;
+            wireframeSphere.rotation.z += 0.005;
+            
+            // Pulsing glow effect
+            const pulseIntensity = 0.3 + Math.sin(time * 2) * 0.2;
+            sphereMaterial.emissiveIntensity = pulseIntensity;
+            
+            // Animate glow sphere
+            glowSphere.rotation.y -= 0.002;
+            glowSphere.rotation.x += 0.001;
+            glowSphere.scale.setScalar(1 + Math.sin(time) * 0.1);
+            
+            // Animate lights for dynamic effect
+            pointLight1.position.x = Math.sin(time) * 5;
+            pointLight1.position.z = Math.cos(time) * 5;
+            
+            pointLight2.position.y = Math.sin(time * 0.7) * 5;
+            pointLight2.position.z = Math.cos(time * 0.7) * 5;
+            
+            // Color cycling effect
+            const hue = (time * 0.1) % 1;
+            const color = new THREE.Color().setHSL(hue, 1, 0.5);
+            sphereMaterial.color.lerp(color, 0.01);
+            sphereMaterial.emissive.lerp(color, 0.01);
+            
+            renderer.render(scene, camera);
+        }
+        
+        // Start animation
+        animate();
+    </script>
+</body>
+</html>
