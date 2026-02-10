@@ -133,6 +133,10 @@
         async function initCore() {
             status.innerText = "Requesting_Ephemeral_Token...";
 
+            // SpeechRecognition variables (recreated on each connection)
+            let recognition = null;
+            let listening = false;
+
             try {
                 // 1. Haal het beveiligde token op bij je Vercel API
                 const startBtn = document.getElementById('start-btn');
@@ -408,6 +412,15 @@
                         ws = null;
                     }
                 } catch (e) { console.warn(e); }
+
+                // Clean up SpeechRecognition
+                try {
+                    if (recognition) {
+                        recognition.stop();
+                        recognition = null;
+                    }
+                } catch (e) { console.warn(e); }
+
                 status.innerText = 'Disconnected';
                 const startBtn = document.getElementById('start-btn');
                 startBtn.classList.remove('hidden');
@@ -481,11 +494,13 @@
             } catch (e) { console.warn(e); }
 
             // Simple SpeechRecognition integration (if available)
-            let recognition = null;
-            let listening = false;
             function toggleMic() {
                 if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
                     alert('SpeechRecognition not supported in this browser');
+                    return;
+                }
+                if (!ws || ws.readyState !== 1) {
+                    status.innerText = 'Not connected';
                     return;
                 }
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -499,8 +514,18 @@
                         appendTranscript(text, 'user');
                         sendUserInput(text);
                     };
-                    recognition.onerror = (e) => console.warn('SpeechRecognition error', e);
-                    recognition.onend = () => { listening = false; updateMicUI(); };
+                    recognition.onerror = (e) => {
+                        console.warn('SpeechRecognition error', e);
+                        // Don't reset listening state on 'aborted' error (normal when stopping)
+                        if (e.error !== 'aborted') {
+                            listening = false;
+                            updateMicUI();
+                        }
+                    };
+                    recognition.onend = () => {
+                        listening = false;
+                        updateMicUI();
+                    };
                 }
                 if (!listening) {
                     recognition.start();
