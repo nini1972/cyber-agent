@@ -574,14 +574,18 @@
             function updateMicUI() {
                 const mic = document.getElementById('mic-btn');
                 if (!mic) return;
+                console.log('updateMicUI called, listening:', listening);
                 mic.textContent = listening ? '🎙️' : '🎤';
                 if (listening) {
                     mic.classList.remove('bg-black/20', 'border-cyan-400');
                     mic.classList.add('bg-amber-700/30', 'border-amber-500');
+                    console.log('Mic button set to active state');
                 } else {
                     mic.classList.remove('bg-amber-700/30', 'border-amber-500');
                     mic.classList.add('bg-black/20', 'border-cyan-400');
+                    console.log('Mic button set to inactive state');
                 }
+                console.log('Mic button classes:', mic.className);
             }
 
             try {
