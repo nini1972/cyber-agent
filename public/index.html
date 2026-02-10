@@ -557,8 +557,8 @@
                         }
                     };
                     recognition.onend = () => {
-                        listening = false;
-                        updateMicUI();
+                        // Don't automatically reset listening state - only reset when user explicitly clicks the button
+                        console.log('SpeechRecognition ended');
                     };
                 }
                 if (!listening) {
